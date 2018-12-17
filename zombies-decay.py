@@ -16,36 +16,37 @@ The particles only present in the process-0 are called zombies (BLUE), and
 those present only in process-1 are called anti-zombies (GREEN). Those
 that are present in both are called regular (RED).
 """
-
+import matplotlib
+matplotlib.use('Qt5Agg')
 import matplotlib.animation as manimation
 import simpy
 import numpy as np
 import matplotlib.pyplot as plt
+
 exprand = np.random.exponential
 rand = np.random.random
 
-
-
 DIM = 2
-SIZE = 20   # Size of the domain is (SIZE)^DIM
-LAMBDA = 2   # The arrival rate
-GEN_TIME_CONST = 1 / (LAMBDA * SIZE**2)   # Total arrival rate
-LIFETIME = 0.125    # The average time a particle stays
-UNTIL_TIME = 180    # The run-time of the simulation
-NUMZOMBIES = 5      # Maximum number of zombies initially present in
-                    # the system
+SIZE = 20  # Size of the domain is (SIZE)^DIM
+LAMBDA = 2  # The arrival rate
+GEN_TIME_CONST = 1 / (LAMBDA * SIZE ** 2)  # Total arrival rate
+LIFETIME = 0.125  # The average time a particle stays
+UNTIL_TIME = 180  # The run-time of the simulation
+NUMZOMBIES = 5  # Maximum number of zombies initially present in
+# the system
 ALIVE = 1
 DEAD = 0
 
-
-TORUS = []
-for i in range(DIM):
-    temp = [[k+[j]] for k in TORUS for j in range(-1,2)]
+TORUS = [[i] for i in range(-1, 2)]
+for i in range(DIM-1):
+    temp = [k + [j] for k in TORUS for j in range(-1, 2)]
     TORUS = temp
 TORUS = SIZE * np.array(TORUS)
+print("TORUS=", TORUS)
 
 CAPTURE_MOVIE = True
-UPDATE_PLOT = False
+updatePlot = False
+
 
 # Particle class holds the information of a particle
 class Particle():
@@ -54,34 +55,34 @@ class Particle():
         self.location = x_p
         self.birth_time = b_p
         self.lifetime = l_p
-        self.state = s_p     # State = Vector of ALIVE or DEAD in
-                             # process_{0,1}
+        self.state = s_p  # State = Vector of ALIVE or DEAD in
+        # process_{0,1}
         env.process(self.run())
-        
-    def run(self): # The lifetime process of a particle. It waits till
-                   # the lifetime runs out.
+
+    def run(self):  # The lifetime process of a particle. It waits till
+        # the lifetime runs out.
         yield env.timeout(self.lifetime)
         hash_loc = np.floor(self.location)
         self.state = [DEAD, DEAD]
         t_hash_loc = tuple(hash_loc)
-        Plist[t_hash_loc].remove(self) 
+        Plist[t_hash_loc].remove(self)
         print("{0:3f} : Particle {1} departs".format(env.now, self.id))
-        
 
-#def hashloc(loc):
+
+# def hashloc(loc):
 #    return np.floor(loc) % SIZE
 
 def adjSquares(ind, hashed_loc):
     if ind == 0:
         rt = []
-        for i in range(-1,2):
+        for i in range(-1, 2):
             temp = list(hashed_loc)
             temp[0] += i
             rt.append(temp)
         return rt
     else:
         rt = []
-        for i in range(-1,2):
+        for i in range(-1, 2):
             temp = list(hashed_loc)
             temp[ind] += i
             rt = rt + adjSquares(ind - 1, temp)
@@ -93,7 +94,7 @@ def distance(loc1, loc2):
 
 
 # Find the state of a particle after arrival
-def stateAtArrival(loc): 
+def stateAtArrival(loc):
     state = [ALIVE, ALIVE]
     hash_loc = np.floor(loc)
     ind = len(loc) - 1
@@ -108,6 +109,7 @@ def stateAtArrival(loc):
                     if state[0] == state[1] == DEAD:
                         return state
     return state
+
 
 # The particle generator process
 def particleGenerator():
@@ -128,7 +130,7 @@ def particleGenerator():
                 Plist[t_hash_loc] = [new_pt]
             iden += 1
     while True:
-        yield env.timeout(exprand(GEN_TIME_CONST)) # Wait till new arrival
+        yield env.timeout(exprand(GEN_TIME_CONST))  # Wait till new arrival
         loc = np.array([rand(), rand()]) * SIZE
         hash_loc = np.floor(loc) % SIZE
         state = stateAtArrival(loc)
@@ -141,54 +143,53 @@ def particleGenerator():
             else:
                 Plist[t_hash_loc] = [new_pt]
         iden += 1
-        if end_sim: # Another way to safely exit the simulation
+        if end_sim:  # Another way to safely exit the simulation
             env.exit()
-        
 
 
 def colorpt(state):
-    if state[0]==state[1]==ALIVE:
-        return [1,0,0,1] #RED
-    elif state[0]==ALIVE: 
-        return [0,1,0,1] #BLUE
+    if state[0] == state[1] == ALIVE:
+        return [1, 0, 0, 1]  # RED
+    elif state[0] == ALIVE:
+        return [0, 1, 0, 1]  # BLUE
     else:
-        return [0,0,1,1] #GREEN
+        return [0, 0, 1, 1]  # GREEN
 
 
-def update_plot():
+def updatePlot():
     plt.cla()
     global end_sim
     end_sim = True
     for bucket in Plist.values():
         for pt in bucket:
-            ax1.add_artist(plt.Circle(pt.location, 0.5,alpha = 0.3, color = colorpt(pt.state)))   
+            ax1.add_artist(plt.Circle(pt.location, 0.5, alpha=0.3, color=colorpt(pt.state)))
             if pt.state[0] != pt.state[1] and end_sim:
                 end_sim = False
     plt.axis((0, SIZE, 0, SIZE))
-    if UPDATE_PLOT:
+    if updatePlot:
         plt.draw()
         plt.pause(0.0001)
-    
 
-def writer_grabber():
+
+def movieGrabber():
     FFMpegWriter = manimation.writers['ffmpeg']
     metadata = dict(title='Movie Test', artist='Matplotlib', comment='Movie support!')
     writer = FFMpegWriter(fps=15, metadata=metadata)
     with writer.saving(fig1, "simvideo_lam{0}_lif{1}_s{2}.mp4".format(LAMBDA, LIFETIME, SIZE), 200):
         while env.now < UNTIL_TIME - 0.2:
             yield env.timeout(0.065)
-            update_plot()
+            updatePlot()
             if CAPTURE_MOVIE:
                 writer.grab_frame()
             if end_sim:
                 env.exit()
 
-                
+
 def main():
     np.random.seed(0)
-    env.process(particleGenerator()) # Start Particle generator
-    env.process(writer_grabber())    # Video capture process
-    env.run(until = UNTIL_TIME)
+    env.process(particleGenerator())  # Start Particle generator
+    env.process(movieGrabber())  # Video capture process
+    env.run(until=UNTIL_TIME)
 
 
 # Setting up the SimPy simulation
